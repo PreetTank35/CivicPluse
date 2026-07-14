@@ -25,35 +25,42 @@ function timeAgo(dateStr) {
 }
 
 const STATUS_PROGRESS = {
-  open: { pct: 10, color: 'var(--warning)' },
-  acknowledged: { pct: 25, color: 'var(--accent)' },
-  in_progress: { pct: 55, color: 'var(--primary)' },
+  reported: { pct: 15, color: 'var(--brand-orange)' },
+  open: { pct: 20, color: 'var(--warning)' },
+  acknowledged: { pct: 35, color: 'var(--accent)' },
+  in_progress: { pct: 60, color: 'var(--primary)' },
   resolved: { pct: 85, color: 'var(--success)' },
   verified: { pct: 100, color: '#166534' },
-  escalated: { pct: 40, color: 'var(--danger)' },
+  escalated: { pct: 45, color: 'var(--danger)' },
+  rejected: { pct: 100, color: '#991b1b' },
 };
 
 const STATUS_LABELS = {
+  reported: 'Reported',
   open: 'Open',
   acknowledged: 'Acknowledged',
   in_progress: 'In Progress',
   resolved: 'Resolved',
   verified: 'Verified',
   escalated: 'Escalated',
+  rejected: 'Rejected',
 };
 
 function InstaMediaCarousel({ issue, category, onNavigate }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const items = [];
   if (issue.video_url) items.push({ type: 'video', url: issue.video_url });
-  if (issue.evidence && issue.evidence.length > 0) {
-    issue.evidence.forEach(url => {
+  
+  const mediaList = issue.media_urls || issue.evidence || [];
+  if (Array.isArray(mediaList) && mediaList.length > 0) {
+    mediaList.forEach(url => {
       if (!items.some(i => i.url === url)) {
         const isVid = typeof url === 'string' && (url.includes('.mp4') || url.includes('.webm') || url.includes('.mov') || url.startsWith('data:video/'));
         items.push({ type: isVid ? 'video' : 'photo', url });
       }
     });
   }
+
 
   if (items.length === 0) {
     return (
@@ -199,10 +206,12 @@ export default function IssueFeed() {
   const filteredIssues = issues.filter(issue => {
     if (filter === 'my_area') {
       const currentUser = getUserById(user?.id || 'user-1');
-      if (currentUser?.locality && issue.locality !== currentUser.locality) return false;
+      const userLocality = currentUser?.locality_id || currentUser?.locality;
+      const issueLocality = issue.locality_id || issue.locality;
+      if (userLocality && issueLocality !== userLocality) return false;
     }
     if (search) {
-      if (!issue.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (!issue.title?.toLowerCase().includes(search.toLowerCase())) return false;
     }
     return true;
   }).sort((a, b) => {
@@ -211,8 +220,10 @@ export default function IssueFeed() {
     }
     let scoreA = 0;
     let scoreB = 0;
-    if (a.locality === userPrefs.locality) scoreA += 50;
-    if (b.locality === userPrefs.locality) scoreB += 50;
+    const aLoc = a.locality_id || a.locality;
+    const bLoc = b.locality_id || b.locality;
+    if (aLoc === userPrefs.locality) scoreA += 50;
+    if (bLoc === userPrefs.locality) scoreB += 50;
     if (userPrefs.interests?.includes(a.category)) scoreA += 25;
     if (userPrefs.interests?.includes(b.category)) scoreB += 25;
     const sevMap = { critical: 30, high: 20, medium: 10, low: 0 };
@@ -221,9 +232,10 @@ export default function IssueFeed() {
     return scoreB - scoreA;
   });
 
-  const mapCenter = filteredIssues.length > 0
-    ? [filteredIssues[0].location.lat, filteredIssues[0].location.lng]
-    : [18.5204, 73.8567];
+  const firstIssue = filteredIssues[0];
+  const firstLat = firstIssue?.location_lat ?? firstIssue?.location?.lat ?? 18.5204;
+  const firstLng = firstIssue?.location_lng ?? firstIssue?.location?.lng ?? 73.8567;
+  const mapCenter = [firstLat, firstLng];
 
   function handleVote(e, issueId) {
     e.stopPropagation();
@@ -295,72 +307,18 @@ export default function IssueFeed() {
             </select>
           </div>
 
-          {/* View Mode Tabs */}
-          <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
-            <div className="feed-view-tabs">
-              <button
-                className={`feed-view-tab ${feedMode === 'feed' ? 'active' : ''}`}
-                onClick={() => setFeedMode('feed')}
-              >
-                <Image size={14} /> Feed
-              </button>
-              <button
-                className={`feed-view-tab ${feedMode === 'map' ? 'active' : ''}`}
-                onClick={() => setFeedMode('map')}
-              >
-                <MapIcon size={14} /> Map
-              </button>
-              <button
-                className={`feed-view-tab ${feedMode === 'reels' ? 'active' : ''}`}
-                onClick={() => setFeedMode('reels')}
-              >
-                <Video size={14} /> Reels
-              </button>
-            </div>
-
-            {/* Map size controls with slider and presets */}
-            {feedMode === 'map' && (
-              <div className="map-size-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-secondary)', padding: '4px 12px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)' }}>Map Size:</span>
-                <button className={`map-size-btn ${mapSize === 'compact' ? 'active' : ''}`} onClick={() => { setMapSize('compact'); setMapWidthPct(25); localStorage.setItem('civicpulse_map_size_pref', 'compact'); localStorage.setItem('civicpulse_map_width_pct', '25'); }}>
-                  25%
-                </button>
-                <button className={`map-size-btn ${mapSize === 'split' ? 'active' : ''}`} onClick={() => { setMapSize('split'); setMapWidthPct(50); localStorage.setItem('civicpulse_map_size_pref', 'split'); localStorage.setItem('civicpulse_map_width_pct', '50'); }}>
-                  50%
-                </button>
-                <button className={`map-size-btn ${mapSize === 'large' ? 'active' : ''}`} onClick={() => { setMapSize('large'); setMapWidthPct(75); localStorage.setItem('civicpulse_map_size_pref', 'large'); localStorage.setItem('civicpulse_map_width_pct', '75'); }}>
-                  75%
-                </button>
-                <button className={`map-size-btn ${mapSize === 'full' ? 'active' : ''}`} onClick={() => { setMapSize('full'); setMapWidthPct(100); localStorage.setItem('civicpulse_map_size_pref', 'full'); localStorage.setItem('civicpulse_map_width_pct', '100'); }}>
-                  100%
-                </button>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  value={mapWidthPct}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    setMapWidthPct(val);
-                    setMapSize(val === 100 ? 'full' : val < 35 ? 'compact' : 'split');
-                    localStorage.setItem('civicpulse_map_width_pct', String(val));
-                  }}
-                  title={`Map Width: ${mapWidthPct}%`}
-                  style={{ width: '80px', cursor: 'pointer' }}
-                />
-              </div>
-            )}
-
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button
               className="btn btn-secondary"
               onClick={() => setIsQuizModalOpen(true)}
-              style={{ height: '36px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ height: '36px', padding: '0 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Sparkles size={14} color="var(--primary)" /> <span className="hide-mobile">Personalize</span>
+              <Sparkles size={14} color="var(--primary)" /> <span className="hide-mobile">Personalize Feed</span>
             </button>
 
-            <button className="btn btn-primary" onClick={() => setIsReportModalOpen(true)} style={{ height: '36px', padding: '0 14px' }}>
-              <Plus size={14} /> <span className="hide-mobile">Report</span>
+            <button className="btn btn-primary" onClick={() => setIsReportModalOpen(true)} style={{ height: '36px', padding: '0 16px', fontWeight: 600 }}>
+              <Plus size={16} /> <span className="hide-mobile">Report Problem</span>
             </button>
           </div>
         </div>
@@ -389,18 +347,22 @@ export default function IssueFeed() {
                 {filteredIssues.map(issue => {
                   const reporter = getUserById(issue.reporter);
                   const category = CATEGORIES.find(c => c.id === issue.category);
-                  const statusInfo = STATUS_PROGRESS[issue.status] || STATUS_PROGRESS.open;
+                  const statusInfo = STATUS_PROGRESS[issue.status] || STATUS_PROGRESS.reported || { pct: 15, color: 'var(--brand-orange)' };
                   const isVoted = issue.voters?.includes(user?.id || 'user-1');
 
                   return (
-                    <div key={issue.id} className="insta-card animate-fade-in">
+                    <div key={issue.id} className="insta-card">
                       {/* Header */}
                       <div className="insta-card-header">
-                        <div className="insta-card-avatar">
-                          {reporter?.avatar || '?'}
+                        <div className="insta-card-avatar" onClick={() => navigate(`/citizen/profile/${issue.reporter}`)}>
+                          {reporter?.avatar ? (
+                            <img src={reporter.avatar} alt={reporter?.name} />
+                          ) : (
+                            reporter?.name?.charAt(0) || 'C'
+                          )}
                         </div>
-                        <div className="insta-card-user-info">
-                          <div className="insta-card-username">{reporter?.name || 'Anonymous'}</div>
+                        <div className="insta-card-user" onClick={() => navigate(`/citizen/profile/${issue.reporter}`)}>
+                          <div className="insta-card-username">{reporter?.name || 'Citizen Reporter'}</div>
                           <div className="insta-card-location">
                             <MapPin size={10} /> {issue.location?.locality_name || 'Pune'}
                           </div>
@@ -437,10 +399,10 @@ export default function IssueFeed() {
                           className={`insta-action-btn ${isVoted ? 'voted' : ''}`}
                           onClick={(e) => handleVote(e, issue.id)}
                         >
-                          <ThumbsUp size={18} /> {issue.votes}
+                          <ThumbsUp size={18} /> {issue.votes || issue.support_count || 1}
                         </button>
                         <button className="insta-action-btn" onClick={() => navigate(`/citizen/issue/${issue.id}`)}>
-                          <MessageCircle size={18} /> {issue.comments?.length || 0}
+                          <MessageCircle size={18} /> {issue.comments?.length || issue.comment_count || 0}
                         </button>
                         <button className="insta-action-btn">
                           <Share2 size={18} />
@@ -468,7 +430,7 @@ export default function IssueFeed() {
                             fontSize: '10px',
                             padding: '2px 8px',
                           }}>
-                            {STATUS_LABELS[issue.status]}
+                            {STATUS_LABELS[issue.status] || issue.status || 'Reported'}
                           </span>
                           <div className="status-progress-bar">
                             <div className="status-progress-fill" style={{

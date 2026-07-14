@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
-import { AlertCircle, Clock, AlertTriangle, ThumbsUp, Shield, FileText, Users, Settings } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { AlertCircle, Clock, AlertTriangle, ThumbsUp, Shield, FileText, Users, Settings, CheckCircle, Check, ArrowRight } from 'lucide-react';
 import StatsCard from '../components/StatsCard';
 import { DonutChart, BarChartComponent, LineChartComponent } from '../components/Charts';
-import { getAllIssues, getDashboardStats } from '../data/store';
+import { getAllIssues, getDashboardStats, verifyIssueBySubAdmin, updateIssueStatus } from '../data/store';
 import { CATEGORIES, MONTHLY_TRENDS, DEPT_PERFORMANCE } from '../data/mockData';
 import IssueCard from '../components/IssueCard';
 import PageTransition from '../components/PageTransition';
@@ -82,6 +82,14 @@ export default function AdminDashboard() {
       .filter(i => i.status === 'escalated' || (i.sla_deadline && new Date(i.sla_deadline) < new Date() && !['resolved', 'verified'].includes(i.status)))
       .sort((a, b) => b.priority_score - a.priority_score)
       .slice(0, 5);
+  }, [issues]);
+
+  const subadminPendingQueue = useMemo(() => {
+    return issues.filter(i => ['open', 'acknowledged'].includes(i.status) && !i.subadmin_verified);
+  }, [issues]);
+
+  const adminVerifiedQueue = useMemo(() => {
+    return issues.filter(i => i.status === 'verified' || i.subadmin_verified);
   }, [issues]);
 
   return (
@@ -169,6 +177,125 @@ export default function AdminDashboard() {
             </tbody>
           </table>
         </div>
+
+        {/* ═══ SUB-ADMIN VERIFICATION QUEUE (Sub-Admin only) ═══ */}
+        {!isAdmin && (
+          <div className="card animate-fade-in" style={{ marginBottom: 'var(--space-xl)', borderLeft: '4px solid var(--brand-teal)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
+              <h5 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-teal)', margin: 0 }}>
+                <CheckCircle size={18} /> Area Sub-Admin Verification Queue ({subadminPendingQueue.length} pending)
+              </h5>
+              <span style={{ fontSize: '11px', background: 'var(--brand-teal-50)', color: 'var(--brand-teal)', padding: '3px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                Step 1: Locality Authenticity Check
+              </span>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Review citizen reports in your jurisdiction. Verify physical authenticity to push them immediately to the City Administration dispatch dashboard.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {subadminPendingQueue.length > 0 ? (
+                subadminPendingQueue.map(issue => (
+                  <div key={issue.id} style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div>
+                        <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--brand-teal)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          📍 {issue.location?.locality_name || 'Ward Area'} • {issue.category}
+                        </span>
+                        <h4 style={{ fontSize: '15px', fontWeight: 700, margin: '4px 0', color: 'var(--text-primary)' }}>{issue.title}</h4>
+                      </div>
+                      <span className="badge" style={{ background: 'var(--warning-bg)', color: 'var(--warning)', fontSize: '11px', fontWeight: 700 }}>
+                        Pending Verification
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: 1.5 }}>
+                      {issue.description}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', borderTop: '1px solid var(--border-light)', paddingTop: '12px' }}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => verifyIssueBySubAdmin(issue.id, 'high', 'Verified authentic by Area Sub-Admin. Escalated to City Admin queue.')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+                      >
+                        <Check size={14} /> Verify & Push to City Admin
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => updateIssueStatus(issue.id, 'in_progress', 'Sub-Admin directly dispatched ward maintenance team')}
+                      >
+                        Direct Ward Dispatch (In Progress)
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <CheckCircle size={32} color="var(--success)" style={{ margin: '0 auto 8px', opacity: 0.7 }} />
+                  <p style={{ margin: 0, fontWeight: 600 }}>All reports in your locality are verified! 🎉</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ CITY ADMIN DISPATCH QUEUE (Admin only) ═══ */}
+        {isAdmin && (
+          <div className="card animate-fade-in" style={{ marginBottom: 'var(--space-xl)', borderLeft: '4px solid var(--brand-saffron)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
+              <h5 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-saffron-dark)', margin: 0 }}>
+                <Shield size={18} /> Sub-Admin Verified Issues Queue ({adminVerifiedQueue.length} verified ready)
+              </h5>
+              <span style={{ fontSize: '11px', background: 'var(--brand-saffron-50)', color: 'var(--brand-saffron-dark)', padding: '3px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                Step 2: City Admin Final Budget & Dispatch
+              </span>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              These problems have been field-verified by Area Sub-Admins. Allocate budget, assign specific municipal departments, and authorize work orders.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {adminVerifiedQueue.length > 0 ? (
+                adminVerifiedQueue.map(issue => (
+                  <div key={issue.id} style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div>
+                        <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          🛡️ Verified by Sub-Admin • {issue.location?.locality_name || 'Ward Area'}
+                        </span>
+                        <h4 style={{ fontSize: '15px', fontWeight: 700, margin: '4px 0', color: 'var(--text-primary)' }}>{issue.title}</h4>
+                      </div>
+                      <span className="badge" style={{ background: 'var(--success-bg)', color: 'var(--success)', fontSize: '11px', fontWeight: 700 }}>
+                        Verified Ready
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: 1.5 }}>
+                      {issue.description}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', borderTop: '1px solid var(--border-light)', paddingTop: '12px' }}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => updateIssueStatus(issue.id, 'in_progress', 'City Admin approved budget and dispatched specialized municipal crew')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+                      >
+                        <ArrowRight size={14} /> Authorize Work Order (In Progress)
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => updateIssueStatus(issue.id, 'resolved', 'Verified resolved by city inspection team')}
+                        style={{ color: 'var(--success)', borderColor: 'var(--success)' }}
+                      >
+                        Mark Completely Resolved
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <Shield size={32} color="var(--brand-teal)" style={{ margin: '0 auto 8px', opacity: 0.7 }} />
+                  <p style={{ margin: 0, fontWeight: 600 }}>No verified issues pending city-level dispatch right now.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Escalated / At-Risk Issues */}
         <div className="card animate-fade-in" style={{ marginBottom: 'var(--space-xl)' }}>

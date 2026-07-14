@@ -11,22 +11,33 @@ export default function Profile() {
   const localities = getAllLocalities();
 
   useEffect(() => {
-    // Merge auth context user with mock database user
-    const dbUser = getUserById(authUser?.id) || getUserById('user-1');
-    setProfile(dbUser);
+    // Merge auth context user with mock database user and provide safe defaults
+    const dbUser = getUserById(authUser?.id) || getUserById('user-1') || {};
+    const normalized = {
+      ...dbUser,
+      points: dbUser.points ?? dbUser.impact_score ?? 450,
+      badges: Array.isArray(dbUser.badges) ? dbUser.badges : ['first_report', 'supporter_10', 'resolved_5'],
+      streak: dbUser.streak ?? 7,
+      locality: dbUser.locality ?? dbUser.locality_id ?? 'kothrud',
+      avatar: dbUser.avatar || dbUser.name?.substring(0, 2)?.toUpperCase() || 'C',
+    };
+    setProfile(normalized);
   }, [authUser]);
 
   if (!profile) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading profile...</div>;
 
-  const currentLevel = LEVELS.slice().reverse().find(l => profile.points >= l.minScore) || LEVELS[0];
-  const nextLevel = LEVELS.find(l => l.minScore > profile.points);
+  const currentLevel = LEVELS.slice().reverse().find(l => profile.points >= (l.minScore ?? l.minPts ?? 0)) || LEVELS[0] || { level: 1, title: 'Observer', icon: '🌱', minScore: 0 };
+  const nextLevel = LEVELS.find(l => (l.minScore ?? l.minPts ?? 0) > profile.points);
   
+  const curMin = currentLevel.minScore ?? currentLevel.minPts ?? 0;
+  const nextMin = nextLevel ? (nextLevel.minScore ?? nextLevel.minPts ?? 1000) : curMin + 500;
+
   const progressPercent = nextLevel 
-    ? ((profile.points - currentLevel.minScore) / (nextLevel.minScore - currentLevel.minScore)) * 100
+    ? Math.min(Math.max(((profile.points - curMin) / (nextMin - curMin)) * 100, 0), 100)
     : 100;
 
-  const userBadges = BADGES_CATALOG.filter(b => profile.badges.includes(b.id));
-  const localityName = localities.find(l => l.id === profile.locality)?.name || 'Pune';
+  const userBadges = (BADGES_CATALOG || []).filter(b => profile.badges.includes(b.id));
+  const localityName = localities.find(l => l.id === profile.locality)?.name || profile.locality || 'Pune';
 
   return (
     <PageTransition>
@@ -61,8 +72,8 @@ export default function Profile() {
         {/* Gamification Stats */}
         <div className="grid-3" style={{ gap: 'var(--space-md)' }}>
           <div style={{ background: 'var(--bg-primary)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)', textAlign: 'center', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 'var(--text-2xl)', marginBottom: '4px' }}>{currentLevel.icon}</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)' }}>{currentLevel.title}</div>
+            <div style={{ fontSize: 'var(--text-2xl)', marginBottom: '4px' }}>{currentLevel.icon || '🌱'}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)' }}>{currentLevel.title || currentLevel.name || 'Observer'}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Current Level</div>
           </div>
           
@@ -83,8 +94,8 @@ export default function Profile() {
         {nextLevel && (
           <div style={{ marginTop: 'var(--space-lg)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: '8px', fontWeight: 600 }}>
-              <span>Level {currentLevel.level}</span>
-              <span style={{ color: 'var(--text-muted)' }}>{nextLevel.minScore - profile.points} pts to Level {nextLevel.level}</span>
+              <span>Level {currentLevel.level || 1}</span>
+              <span style={{ color: 'var(--text-muted)' }}>{Math.max(nextMin - profile.points, 0)} pts to Level {nextLevel.level || 2}</span>
             </div>
             <div className="progress-bar">
               <div className="progress-value" style={{ width: `${progressPercent}%`, background: 'var(--primary)' }}></div>

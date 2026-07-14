@@ -13,26 +13,12 @@ export const supabase = isDemoMode
 export { isDemoMode };
 
 /**
- * Detect role from email domain.
- * - *.sub.gov → sub_admin
- * - *.gov (but not .sub.gov) → admin
- * - anything else → citizen
- */
-export function detectRoleFromEmail(email) {
-  if (!email) return 'citizen';
-  const lower = email.toLowerCase().trim();
-  if (lower.endsWith('.sub.gov')) return 'sub_admin';
-  if (lower.endsWith('.gov')) return 'admin';
-  return 'citizen';
-}
-
-/**
  * Get role label for display.
  */
 export function getRoleLabel(role) {
   switch (role) {
-    case 'admin': return 'Admin';
-    case 'sub_admin': return 'Sub-Admin';
+    case 'super_admin': return 'Super Admin';
+    case 'moderator': return 'Locality Moderator';
     default: return 'Citizen';
   }
 }
@@ -42,8 +28,19 @@ export function getRoleLabel(role) {
  */
 export function getRoleIcon(role) {
   switch (role) {
-    case 'admin': return '⚙️';
-    case 'sub_admin': return '🛡️';
+    case 'super_admin': return '⚙️';
+    case 'moderator': return '🛡️';
     default: return '👤';
   }
+}
+
+/**
+ * Auto-detect role from email address (for demo / quick login).
+ */
+export function detectRoleFromEmail(email) {
+  if (!email) return 'citizen';
+  const lower = email.toLowerCase();
+  if (lower.includes('admin')) return 'super_admin';
+  if (lower.includes('mod') || lower.includes('subadmin')) return 'moderator';
+  return 'citizen';
 }

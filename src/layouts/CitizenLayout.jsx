@@ -1,120 +1,95 @@
-import { Outlet, NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Activity, Home, Trophy, User, LogOut, Grid, Map as MapIcon, Video } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
+import { LogOut, Menu, UserCheck } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
-import NotificationsMenu from '../components/NotificationsMenu';
-import ChatDrawer from '../components/ChatDrawer';
-import { events } from '../data/store';
+import { isStaff } from '../lib/permissions';
+import CitizenSidebar from '../components/CitizenSidebar';
+import BottomNav from '../components/BottomNav';
 
+const SIDEBAR_KEY = 'civicpulse_sidebar_collapsed';
+
+/**
+ * CitizenLayout — Public/Citizen dashboard with collapsible left sidebar + mobile drawer/bottom nav.
+ * Connects directly to CitizenSidebar with user-requested menu order.
+ */
 export default function CitizenLayout() {
-  const { user, signOut } = useAuth();
+  const { user, role, signOut, switchRole } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === 'true');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isIssuesPage = location.pathname === '/citizen' || location.pathname === '/citizen/';
-  const currentView = searchParams.get('view') || 'feed';
-
-  const navLinks = [
-    { to: '/citizen', label: 'Issues', icon: <Home size={16} />, end: true },
-    { to: '/citizen/leaderboard', label: 'Leaderboard', icon: <Trophy size={16} /> },
-    { to: '/citizen/profile', label: 'Profile', icon: <User size={16} /> },
-  ];
+  function toggleSidebar() {
+    setCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_KEY, String(next));
+      return next;
+    });
+  }
 
   async function handleLogout() {
     await signOut();
     navigate('/auth');
   }
 
-  function handleViewSwitch(mode) {
-    navigate(`/citizen?view=${mode}`);
-    events.emit('viewModeChanged', mode);
-  }
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [navigate]);
 
   return (
-    <>
-      {/* ── Primary Top Bar ── */}
-      <nav className="navbar">
-        <div className="navbar-inner">
-          <Link to="/citizen" className="navbar-brand">
-            <Activity size={24} />
-            <span>CivicPulse</span>
-          </Link>
+    <div className="citizen-layout">
+      <a href="#main-content" className="skip-nav">Skip to content</a>
 
-          {/* Desktop main links */}
-          <ul className="navbar-links">
-            {navLinks.map(link => (
-              <li key={link.to}>
-                <NavLink
-                  to={link.to}
-                  className={({ isActive }) => isActive ? 'active' : ''}
-                  end={link.end}
-                >
-                  {link.icon} {link.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+      {/* Citizen Sidebar (Desktop + Mobile drawer) */}
+      <CitizenSidebar
+        collapsed={collapsed}
+        onToggle={toggleSidebar}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
 
-          <div className="navbar-actions">
-            <NotificationsMenu />
-            <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Sign out">
-              <LogOut size={16} /> <span className="hide-mobile">Sign Out</span>
+      {/* ── Main Content Area ── */}
+      <div className={`citizen-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Top bar (mobile / desktop header with role & sign out) */}
+        <header className="citizen-topbar">
+          <div className="citizen-topbar-left">
+            <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+              <Menu size={20} />
             </button>
+            <span style={{ fontWeight: 800, fontSize: '16px', color: 'var(--primary)' }} className="show-mobile">
+              CivicPulse
+            </span>
           </div>
-        </div>
-      </nav>
-
-      {/* ── Always-Visible Horizontal Sub-Navbar under Logo ── */}
-      <div className="citizen-horizontal-subnav">
-        <div className="subnav-inner">
-          {/* Main dashboard navigation items (always horizontal, scrollable on small screens) */}
-          <div className="subnav-main-links">
-            {navLinks.map(link => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) => isActive ? 'subnav-item active' : 'subnav-item'}
-                end={link.end}
+          <div className="citizen-topbar-right">
+            {/* Quick Role Switcher for Testing/Demonstration if desired */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <select
+                className="form-input btn-sm"
+                value={role || 'citizen'}
+                onChange={e => {
+                  switchRole(e.target.value);
+                  if (isStaff(e.target.value)) navigate('/control-panel');
+                }}
+                style={{ padding: '4px 8px', fontSize: '12px', height: 'auto', background: 'var(--bg-tertiary)' }}
               >
-                {link.icon} <span>{link.label}</span>
-              </NavLink>
-            ))}
+                <option value="citizen">👤 Citizen Role</option>
+                <option value="moderator">🛡️ Sub-Admin (Verifier)</option>
+                <option value="super_admin">🏛️ Admin (Officer)</option>
+              </select>
+              <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Sign out">
+                <LogOut size={16} />
+                <span className="hide-mobile">Sign Out</span>
+              </button>
+            </div>
           </div>
+        </header>
 
-          {/* Instagram-style Feed / Map / Reels Buttons */}
-          <div className="subnav-insta-tabs">
-            <button
-              className={`insta-subnav-btn ${currentView === 'feed' && isIssuesPage ? 'active' : ''}`}
-              onClick={() => handleViewSwitch('feed')}
-              title="Multi-post Feed"
-            >
-              <Grid size={14} /> <span>Feed</span>
-            </button>
-            <button
-              className={`insta-subnav-btn ${currentView === 'map' && isIssuesPage ? 'active' : ''}`}
-              onClick={() => handleViewSwitch('map')}
-              title="Map View"
-            >
-              <MapIcon size={14} /> <span>Map</span>
-            </button>
-            <button
-              className={`insta-subnav-btn ${currentView === 'reels' && isIssuesPage ? 'active' : ''}`}
-              onClick={() => handleViewSwitch('reels')}
-              title="Reels Video Feed"
-            >
-              <Video size={14} /> <span>Reels</span>
-            </button>
-          </div>
-        </div>
+        <main id="main-content" className="citizen-page-content">
+          <Outlet />
+        </main>
+
+        {/* ── Mobile Bottom Nav ── */}
+        <BottomNav />
       </div>
-
-      {/* Main Page Content Wrapper with adjusted top padding for both horizontal bars */}
-      <div className="page-wrapper mesh-bg" style={{ paddingTop: 'calc(var(--navbar-height) + 50px)' }}>
-        <Outlet />
-      </div>
-
-      {/* Persistent chat drawer floating action button */}
-      <ChatDrawer />
-    </>
+    </div>
   );
 }

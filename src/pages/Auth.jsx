@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Activity, Mail, Phone, Eye, EyeOff, ArrowRight, Shield, User, Settings } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
@@ -7,12 +8,12 @@ import PageTransition from '../components/PageTransition';
 
 const ROLES = [
   { id: 'citizen', label: 'Citizen', icon: '👤', desc: 'Report and track issues in your community', color: 'var(--primary)' },
-  { id: 'sub_admin', label: 'Sub-Admin', icon: '🛡️', desc: 'Manage and moderate ward-level issues', color: 'var(--warning)' },
-  { id: 'admin', label: 'Admin', icon: '⚙️', desc: 'City-wide administration and analytics', color: 'var(--accent)' },
+  { id: 'moderator', label: 'Locality Moderator', icon: '🛡️', desc: 'Verify and manage issues in assigned locality', color: 'var(--warning)' },
+  { id: 'super_admin', label: 'Super Admin', icon: '⚙️', desc: 'Platform-wide administration and configuration', color: 'var(--accent)' },
 ];
 
 export default function Auth() {
-  const { signUp, signIn, signInWithPhone, verifyPhoneOTP, error, clearError, isDemoMode } = useAuth();
+  const { signUp, signIn, signInWithPhone, verifyPhoneOTP, error, clearError, isDemoMode, authDisabled } = useAuth();
 
   const [mode, setMode] = useState('signin'); // signin | signup
   const [method, setMethod] = useState('email'); // email | phone
@@ -92,7 +93,25 @@ export default function Auth() {
           <h2>{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h2>
           <p>{mode === 'signin' ? 'Sign in to continue to your dashboard' : 'Join your community\'s civic platform'}</p>
 
-          {isDemoMode && (
+          {authDisabled ? (
+            <div style={{
+              marginTop: 'var(--space-md)',
+              padding: '12px 16px',
+              background: 'rgba(8, 145, 178, 0.12)',
+              border: '1px solid var(--primary)',
+              borderRadius: 'var(--radius-lg)',
+              fontSize: 'var(--text-sm)',
+              color: 'var(--primary)',
+              fontWeight: 600,
+              textAlign: 'center',
+            }}>
+              ⚡ Authentication is currently turned off for open testing.
+              <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Link to="/" className="btn btn-primary btn-sm">Citizen Feed</Link>
+                <Link to="/control-panel" className="btn btn-secondary btn-sm">Control Panel</Link>
+              </div>
+            </div>
+          ) : isDemoMode && (
             <div style={{
               marginTop: 'var(--space-md)',
               padding: '8px 12px',

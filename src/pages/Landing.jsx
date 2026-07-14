@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, Shield, Brain, Users, BarChart3, Scale, Accessibility, Zap, MapPin, CheckCircle } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
+import { useAuth } from '../lib/AuthContext';
 
 const PILLARS = [
   {
@@ -55,6 +56,9 @@ const STEPS = [
 ];
 
 export default function Landing() {
+  const { authDisabled } = useAuth();
+  const targetPath = authDisabled ? '/citizen' : '/auth';
+
   return (
     <PageTransition>
       <div style={{ background: 'var(--bg-page)' }}>
@@ -74,8 +78,8 @@ export default function Landing() {
           </span>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <Link to="/auth" className="btn btn-ghost">Sign In</Link>
-          <Link to="/auth" className="btn btn-primary">Get Started</Link>
+          <Link to={targetPath} className="btn btn-ghost">{authDisabled ? 'Open App' : 'Sign In'}</Link>
+          <Link to={targetPath} className="btn btn-primary">Get Started</Link>
         </div>
       </nav>
 
@@ -100,7 +104,7 @@ export default function Landing() {
           </p>
 
           <div className="hero-actions animate-fade-in stagger-3">
-            <Link to="/auth" className="btn btn-primary btn-lg">
+            <Link to={targetPath} className="btn btn-primary btn-lg">
               Get Started <ArrowRight size={18} />
             </Link>
             <a href="#how-it-works" className="btn btn-secondary btn-lg">
@@ -197,7 +201,7 @@ export default function Landing() {
             With SLA enforcement, resolution proof, and an equity dashboard that makes
             accountability visible to every citizen.
           </p>
-          <Link to="/auth" className="btn btn-primary btn-lg">
+          <Link to={targetPath} className="btn btn-primary btn-lg">
             Get Started — It's Free <ArrowRight size={18} />
           </Link>
         </div>

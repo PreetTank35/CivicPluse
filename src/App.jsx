@@ -1,11 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/AuthContext';
+import { isStaff } from './lib/permissions';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Layouts
 import CitizenLayout from './layouts/CitizenLayout';
-import AdminLayout from './layouts/AdminLayout';
+import ControlPanelLayout from './layouts/ControlPanelLayout';
 
 // Public pages
 import Landing from './pages/Landing';
@@ -13,19 +13,32 @@ import Auth from './pages/Auth';
 
 // Citizen pages
 import IssueFeed from './pages/IssueFeed';
+import PostCreate from './pages/PostCreate';
+import ReportIssue from './pages/ReportIssue';
+import ProblemDetail from './pages/ProblemDetail';
 import IssueDetail from './pages/IssueDetail';
+import MapPage from './pages/MapPage';
+import ReelsPage from './pages/ReelsPage';
 import Leaderboard from './pages/Leaderboard';
+import MyIssues from './pages/MyIssues';
+import CommunityChat from './pages/CommunityChat';
+import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 
-// Admin pages
-import AdminDashboard from './pages/AdminDashboard';
-import EquityDashboard from './pages/EquityDashboard';
+// Control Panel pages
+import CPOverview from './pages/control-panel/CPOverview';
+import CPCaseQueue from './pages/control-panel/CPCaseQueue';
+import CPDepartments from './pages/control-panel/CPDepartments';
+import CPModerators from './pages/control-panel/CPModerators';
 
 /**
- * Protected route that redirects to /auth if not authenticated.
+ * ProtectedRoute — redirects to /auth if not authenticated.
+ * Uses permissions.js for role-based route access.
  */
-function ProtectedRoute({ children, allowedRoles }) {
-  const { isAuthenticated, role, loading } = useAuth();
+function ProtectedRoute({ children, requireStaff = false }) {
+  const { isAuthenticated, role, loading, authDisabled } = useAuth();
+
+  if (authDisabled) return children;
 
   if (loading) {
     return (
@@ -35,96 +48,97 @@ function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
 
-  if (allowedRoles && !allowedRoles.includes(role)) {
-    // Redirect to the correct dashboard based on actual role
-    switch (role) {
-      case 'admin': return <Navigate to="/admin" replace />;
-      case 'sub_admin': return <Navigate to="/subadmin" replace />;
-      default: return <Navigate to="/citizen" replace />;
-    }
+  if (requireStaff && !isStaff(role)) {
+    return <Navigate to="/" replace />;
   }
 
   return children;
 }
 
 /**
- * Redirect authenticated users away from public pages.
+ * PublicRoute — redirects authenticated users to their default page.
  */
 function PublicRoute({ children }) {
-  const { isAuthenticated, role, loading } = useAuth();
+  const { isAuthenticated, role, loading, authDisabled } = useAuth();
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-page)' }}>
-        <div className="loading-spinner" style={{ width: 32, height: 32 }} />
-      </div>
-    );
-  }
+  if (authDisabled) return children;
+  if (loading) return null;
 
   if (isAuthenticated) {
-    switch (role) {
-      case 'admin': return <Navigate to="/admin" replace />;
-      case 'sub_admin': return <Navigate to="/subadmin" replace />;
-      default: return <Navigate to="/citizen" replace />;
-    }
+    if (isStaff(role)) return <Navigate to="/control-panel" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return children;
 }
 
 function AppRoutes() {
-  const location = useLocation();
-  
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        {/* Public routes */}
-      <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+    <Routes>
+      {/* ── Public Routes ── */}
+      <Route path="/landing" element={<PublicRoute><Landing /></PublicRoute>} />
       <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
 
-      {/* Citizen routes */}
-      <Route path="/citizen" element={
-        <ProtectedRoute allowedRoles={['citizen']}>
+      {/* ── Citizen App Routes (/ and /citizen aliases) ── */}
+      <Route path="/" element={
+        <ProtectedRoute>
           <CitizenLayout />
         </ProtectedRoute>
       }>
         <Route index element={<IssueFeed />} />
-        <Route path="issue/:id" element={<IssueDetail />} />
+        <Route path="map" element={<MapPage />} />
+        <Route path="reels" element={<ReelsPage />} />
+        <Route path="report" element={<ReportIssue />} />
+        <Route path="post/new" element={<PostCreate />} />
         <Route path="leaderboard" element={<Leaderboard />} />
+        <Route path="my-issues" element={<MyIssues />} />
+        <Route path="community" element={<CommunityChat />} />
+        <Route path="chat" element={<CommunityChat />} />
+        <Route path="problem/:id" element={<IssueDetail />} />
+        <Route path="issue/:id" element={<IssueDetail />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="profile/:id" element={<Profile />} />
       </Route>
 
-      {/* Sub-Admin routes */}
-      <Route path="/subadmin" element={
-        <ProtectedRoute allowedRoles={['sub_admin']}>
-          <AdminLayout />
+      <Route path="/citizen" element={
+        <ProtectedRoute>
+          <CitizenLayout />
         </ProtectedRoute>
       }>
-        <Route index element={<AdminDashboard />} />
-        <Route path="issues" element={<IssueFeed />} />
+        <Route index element={<IssueFeed />} />
+        <Route path="map" element={<MapPage />} />
+        <Route path="reels" element={<ReelsPage />} />
+        <Route path="report" element={<ReportIssue />} />
+        <Route path="post/new" element={<PostCreate />} />
+        <Route path="leaderboard" element={<Leaderboard />} />
+        <Route path="my-issues" element={<MyIssues />} />
+        <Route path="community" element={<CommunityChat />} />
+        <Route path="chat" element={<CommunityChat />} />
+        <Route path="problem/:id" element={<IssueDetail />} />
         <Route path="issue/:id" element={<IssueDetail />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="profile/:id" element={<Profile />} />
       </Route>
 
-      {/* Admin routes */}
-      <Route path="/admin" element={
-        <ProtectedRoute allowedRoles={['admin']}>
-          <AdminLayout />
+      {/* ── Unified Control Panel ── */}
+      <Route path="/control-panel" element={
+        <ProtectedRoute requireStaff>
+          <ControlPanelLayout />
         </ProtectedRoute>
       }>
-        <Route index element={<AdminDashboard />} />
-        <Route path="issues" element={<IssueFeed />} />
-        <Route path="issue/:id" element={<IssueDetail />} />
-        <Route path="equity" element={<EquityDashboard />} />
+        <Route index element={<CPOverview />} />
+        <Route path="queue" element={<CPCaseQueue />} />
+        <Route path="departments" element={<CPDepartments />} />
+        <Route path="moderators" element={<CPModerators />} />
       </Route>
 
-      {/* Catch-all */}
+      {/* ── Catch-all ── */}
       <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AnimatePresence>
+    </Routes>
   );
 }
 

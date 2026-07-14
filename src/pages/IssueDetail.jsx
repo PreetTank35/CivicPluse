@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ThumbsUp, MessageCircle, MapPin, Clock, Send,
   AlertTriangle, CheckCircle, Shield, Sparkles
@@ -7,12 +7,14 @@ import {
 import { getIssueById, getUserById, getDepartmentById, getLocalityById, voteIssue, addComment, verifyResolution, getCurrentUser } from '../data/store';
 import { CATEGORIES, SEVERITIES } from '../data/mockData';
 import SLATimer from '../components/SLATimer';
+import StatusTimeline from '../components/StatusTimeline';
 import MapView from '../components/MapView';
 import PageTransition from '../components/PageTransition';
 import { statusClass, statusLabel, timeAgo } from '../components/IssueCard';
 
 export default function IssueDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [, forceUpdate] = useState(0);
   const [commentText, setCommentText] = useState('');
 
@@ -25,9 +27,9 @@ export default function IssueDetail() {
             <AlertTriangle size={48} />
             <h3>Issue not found</h3>
             <p>The issue you're looking for doesn't exist.</p>
-            <Link to="/feed" className="btn btn-primary" style={{ marginTop: 'var(--space-md)' }}>
-              Back to Feed
-            </Link>
+            <button onClick={() => navigate(-1)} className="btn btn-primary" style={{ marginTop: 'var(--space-md)' }}>
+              Go Back
+            </button>
           </div>
         </div>
       </div>
@@ -63,15 +65,18 @@ export default function IssueDetail() {
 
   // Reload issue data after mutations
   const freshIssue = getIssueById(id);
+  // Defensive: ensure comments and timeline are always arrays
+  const comments = freshIssue?.comments || [];
+  const timeline = freshIssue?.timeline || [];
 
   return (
     <PageTransition>
       <div className="page-wrapper mesh-bg">
         <div className="container page-content">
         {/* Back link */}
-        <Link to="/feed" className="btn btn-ghost" style={{ marginBottom: 'var(--space-lg)' }}>
-          <ArrowLeft size={16} /> Back to Feed
-        </Link>
+        <button onClick={() => navigate(-1)} className="btn btn-ghost" style={{ marginBottom: 'var(--space-lg)' }}>
+          <ArrowLeft size={16} /> Back
+        </button>
 
         {/* Header */}
         <div className="issue-detail-header">
@@ -102,7 +107,7 @@ export default function IssueDetail() {
 
           <div className="issue-detail-meta">
             <span className="issue-card-meta-item">
-              <MapPin size={14} /> {freshIssue.location?.address}
+              <MapPin size={14} /> {freshIssue.location?.address || 'Unknown location'}
             </span>
             <span className="issue-card-meta-item">
               <Clock size={14} /> {timeAgo(freshIssue.created_at)}
@@ -124,11 +129,27 @@ export default function IssueDetail() {
               <p style={{ lineHeight: 1.8, fontSize: 'var(--text-sm)' }}>{freshIssue.description}</p>
             </div>
 
-            {/* Timeline */}
-            <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-              <h5 style={{ marginBottom: 'var(--space-lg)' }}>Status Timeline</h5>
-              <StatusTimeline timeline={freshIssue.timeline} />
-            </div>
+            {/* Video / Evidence */}
+            {freshIssue.video_url && (
+              <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+                <h5 style={{ marginBottom: 'var(--space-md)' }}>Video Evidence</h5>
+                <video
+                  src={freshIssue.video_url}
+                  controls
+                  playsInline
+                  style={{ width: '100%', borderRadius: 'var(--radius-md)', maxHeight: '400px', objectFit: 'contain', background: '#000' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              </div>
+            )}
+
+            {/* Timeline — with null safety fix */}
+            {timeline.length > 0 && (
+              <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+                <h5 style={{ marginBottom: 'var(--space-lg)' }}>Status Timeline</h5>
+                <StatusTimeline timeline={timeline} />
+              </div>
+            )}
 
             {/* Resolution Proof */}
             {freshIssue.resolution_proof && (
@@ -178,14 +199,20 @@ export default function IssueDetail() {
               </div>
             )}
 
-            {/* Comments */}
+            {/* Comments — fixed with null safety */}
             <div className="card">
               <h5 style={{ marginBottom: 'var(--space-md)' }}>
                 <MessageCircle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
-                Comments ({freshIssue.comments.length})
+                Comments ({comments.length})
               </h5>
 
-              {freshIssue.comments.map(comment => {
+              {comments.length === 0 && (
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: 'var(--space-md) 0' }}>
+                  No comments yet. Be the first to comment!
+                </p>
+              )}
+
+              {comments.map(comment => {
                 const commentUser = getUserById(comment.user);
                 return (
                   <div key={comment.id} className="comment-item">
